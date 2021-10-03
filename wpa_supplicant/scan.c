@@ -2687,7 +2687,7 @@ void scan_est_throughput(struct wpa_supplicant *wpa_s,
 {
 	int rate; /* max legacy rate in 500 kb/s units */
 	int snr = res->snr;
-	const u8 *ies = (const void *) (res + 1);
+	const u8 *ies = (const void *) (res + 1), *ie;
 	size_t ie_len = res->ie_len;
 
 	if (res->est_throughput)
@@ -2701,7 +2701,19 @@ void scan_est_throughput(struct wpa_supplicant *wpa_s,
 	res->est_throughput =
 		wpas_get_est_tpt(wpa_s, ies, ie_len, rate, snr, res->freq);
 
-	/* TODO: channel utilization and AP load (e.g., from AP Beacon) */
+	/* Estimate throughput based on channel load reported by AP.
+	 * Assume that a load of 255 (100%) means no throughput is
+	 * possible. A load of 0 equals to the full estimated throughput
+	 * being achievable.
+	 *
+	 * Use the calculated throughput without any panilty, in case
+	 * BSS load element is not present.
+	 */
+	ie = get_ie(ies, ie_len, WLAN_EID_BSS_LOAD);
+	if (ie == NULL || ie[1] < 5)
+		return; /* No BSS Load advertised */
+
+	res->est_throughput = (res->est_throughput * (255 - ie[4])) / 255;
 }
 
 
