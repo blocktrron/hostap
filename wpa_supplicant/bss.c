@@ -248,6 +248,69 @@ void wpa_bss_remove(struct wpa_supplicant *wpa_s, struct wpa_bss *bss,
 	os_free(bss);
 }
 
+static int wpa_bss_owe_trans_ssid_get(struct wpa_supplicant *wpa_s, struct wpa_bss *bss,
+				      const u8 **ret_ssid, size_t *ret_ssid_len)
+{
+#ifdef CONFIG_OWE
+	const u8 *owe, *pos, *end, *bssid;
+	u8 ssid_len;
+
+	owe = wpa_bss_get_vendor_ie(bss, OWE_IE_VENDOR_TYPE);
+	if (!owe || !wpa_bss_get_ie(bss, WLAN_EID_RSN))
+		return 1;
+
+	pos = owe + 6;
+	end = owe + 2 + owe[1];
+
+	if (end - pos < ETH_ALEN + 1)
+		return 1;
+	bssid = pos;
+	pos += ETH_ALEN;
+	ssid_len = *pos++;
+	if (end - pos < ssid_len || ssid_len > SSID_MAX_LEN)
+		return 1;
+
+	/* Match the profile SSID against the OWE transition mode SSID on the
+	 * open network. */
+	wpa_dbg(wpa_s, MSG_DEBUG, "OWE: transition mode BSSID: " MACSTR
+		" SSID: %s", MAC2STR(bssid), wpa_ssid_txt(pos, ssid_len));
+	*ret_ssid = pos;
+	*ret_ssid_len = ssid_len;
+
+	return 0;
+#else /* CONFIG_OWE */
+	return 1;
+#endif /* CONFIG_OWE */
+}
+
+/** 
+ * wpa_bss_ssid_match - Check whether BSS entry matches with a given
+ * @wpa_s: Pointer to wpa_supplicant data
+ * @bssid: BSSID, or %NULL to match any BSSID
+ * @ssid: SSID
+ * @ssid_len: Length of @ssid
+ * Returns: 0 is BSS entry does not match, 1 if it does
+ */
+int wpa_bss_ssid_match(struct wpa_supplicant *wpa_s, struct wpa_bss *bss,
+		       const u8 *ssid, size_t ssid_len)
+{
+	const u8 * bss_ssid;
+	size_t bss_ssid_len;
+
+	bss_ssid = bss->ssid;
+	bss_ssid_len = bss->ssid_len;
+
+	/* First, check if the network SSID matches */
+	if (bss_ssid_len == ssid_len && os_memcmp(bss_ssid, ssid, bss_ssid_len) == 0)
+		return true;
+
+	/* If it did not match, check if the network matches the OWE transition identity */
+	if (wpa_bss_owe_trans_ssid_get(wpa_s, bss, &bss_ssid, &bss_ssid_len) != 0)
+		return false;
+
+	return bss_ssid_len == ssid_len && os_memcmp(bss_ssid, ssid, bss_ssid_len) == 0;
+}
+
 
 /**
  * wpa_bss_get - Fetch a BSS table entry based on BSSID and SSID
@@ -266,8 +329,7 @@ struct wpa_bss * wpa_bss_get(struct wpa_supplicant *wpa_s, const u8 *bssid,
 		return NULL;
 	dl_list_for_each(bss, &wpa_s->bss, struct wpa_bss, list) {
 		if ((!bssid || os_memcmp(bss->bssid, bssid, ETH_ALEN) == 0) &&
-		    bss->ssid_len == ssid_len &&
-		    os_memcmp(bss->ssid, ssid, ssid_len) == 0)
+		    wpa_bss_ssid_match(wpa_s, bss, ssid, ssid_len))
 			return bss;
 	}
 	return NULL;
