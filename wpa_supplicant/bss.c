@@ -893,7 +893,7 @@ void wpa_bss_update_scan_res(struct wpa_supplicant *wpa_s,
 			     struct wpa_scan_res *res,
 			     struct os_reltime *fetch_time)
 {
-	const u8 *ssid, *p2p, *mesh;
+	const u8 *ssid, *p2p, *mesh, *owe_trans, *rsn;
 	struct wpa_bss *bss;
 
 	if (wpa_s->conf->ignore_old_scan_res) {
@@ -947,6 +947,20 @@ void wpa_bss_update_scan_res(struct wpa_supplicant *wpa_s,
 	mesh = wpa_scan_get_ie(res, WLAN_EID_MESH_ID);
 	if (mesh && mesh[1] <= SSID_MAX_LEN)
 		ssid = mesh;
+
+	owe_trans = wpa_scan_get_vendor_ie(res, OWE_IE_VENDOR_TYPE);
+	rsn = wpa_scan_get_ie(res, WLAN_EID_RSN);
+	if (rsn && owe_trans && ssid[1] < 1) {
+		/* Drop OWE transition networks without SSID.
+		 * 
+		 * They are discovered when scanning for the
+		 * transition network with the correct SSID.
+		 * 
+		 * Otherwise the same BSS is added multiple times
+		 * to the scan-list.
+		 */
+		return;
+	}
 
 	bss = wpa_bss_get(wpa_s, res->bssid, ssid + 2, ssid[1]);
 	if (bss == NULL)
