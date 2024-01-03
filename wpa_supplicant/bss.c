@@ -831,8 +831,12 @@ void wpa_bss_update_scan_res(struct wpa_supplicant *wpa_s,
 			     struct wpa_scan_res *res,
 			     struct os_reltime *fetch_time)
 {
-	const u8 *ssid, *p2p, *mesh;
-	struct wpa_bss *bss;
+	const u8 *ssid, *p2p, *mesh, *owe, *owe_open, *rsn;
+	const u8 *owe_trans_bssid, *owe_trans_ssid;
+	const u8 *ssid_str;
+	struct wpa_bss *bss, *owe_open_bss;
+	size_t ssid_str_len, owe_trans_ssid_len;
+	int ret;
 
 	if (wpa_s->conf->ignore_old_scan_res) {
 		struct os_reltime update;
@@ -886,9 +890,45 @@ void wpa_bss_update_scan_res(struct wpa_supplicant *wpa_s,
 	if (mesh && mesh[1] <= SSID_MAX_LEN)
 		ssid = mesh;
 
-	bss = wpa_bss_get(wpa_s, res->bssid, ssid + 2, ssid[1]);
+	ssid_str = ssid + 2;
+	ssid_str_len = ssid[1];
+
+	/* In case we have an OWE-TM network AND should add it, check if we've
+	 * scanned it's open counterpart. Only then add it with it's SSID to 
+	 * the scan-list.
+	 */
+	rsn = wpa_scan_get_ie(res, WLAN_EID_RSN);
+	owe = wpa_scan_get_vendor_ie(res, OWE_IE_VENDOR_TYPE);
+	if (rsn && owe && ssid_str_len == 0) {
+		/* Read BSSID and SSID of the open network */
+		ret = wpa_bss_get_owe_trans_network(wpa_s, owe, &owe_trans_bssid,
+						    &owe_trans_ssid, &owe_trans_ssid_len);
+		if (ret)
+			return;
+
+		/* Get the open network */
+		owe_open_bss = wpa_bss_get(wpa_s, owe_trans_bssid, owe_trans_ssid, owe_trans_ssid_len);
+		if (!owe_open_bss)
+			return;
+
+		/* Extract SSID of encrypted transition network */
+		owe_open = wpa_bss_get_vendor_ie(owe_open_bss, OWE_IE_VENDOR_TYPE);
+		ret = wpa_bss_get_owe_trans_network(wpa_s, owe_open, &owe_trans_bssid,
+						    &ssid_str, &ssid_str_len);
+		if (ret)
+			return;
+		
+		/* Check if BSSID point at each other */
+		if (os_memcmp(owe_trans_bssid, res->bssid, ETH_ALEN) != 0)
+			return;
+		
+		wpa_printf(MSG_DEBUG, "BSS: Found open OWE-TM BSS " MACSTR
+			   " with OWE-SSID %s", MAC2STR(owe_open_bss->bssid), wpa_ssid_txt(ssid_str, ssid_str_len));
+	}
+
+	bss = wpa_bss_get(wpa_s, res->bssid, ssid_str, ssid_str_len);
 	if (bss == NULL)
-		bss = wpa_bss_add(wpa_s, ssid + 2, ssid[1], res, fetch_time);
+		bss = wpa_bss_add(wpa_s, ssid_str, ssid_str_len, res, fetch_time);
 	else {
 		bss = wpa_bss_update(wpa_s, bss, res, fetch_time);
 		if (wpa_s->last_scan_res) {

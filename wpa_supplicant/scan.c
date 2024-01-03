@@ -3234,6 +3234,12 @@ wpa_supplicant_get_scan_results(struct wpa_supplicant *wpa_s,
 	}
 
 	wpa_bss_update_start(wpa_s);
+	/* Iterate first time for all networks */
+	for (i = 0; i < scan_res->num; i++)
+		wpa_bss_update_scan_res(wpa_s, scan_res->res[i],
+					&scan_res->fetch_time);
+	
+	/* Iterate a second time for OWE-TM networks */
 	for (i = 0; i < scan_res->num; i++)
 		wpa_bss_update_scan_res(wpa_s, scan_res->res[i],
 					&scan_res->fetch_time);
