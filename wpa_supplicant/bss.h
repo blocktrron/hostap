@@ -184,6 +184,8 @@ struct wpabuf * wpa_bss_get_vendor_ie_multi_beacon(const struct wpa_bss *bss,
 						   u32 vendor_type);
 int wpa_bss_get_max_rate(const struct wpa_bss *bss);
 int wpa_bss_get_bit_rates(const struct wpa_bss *bss, u8 **rates);
+int wpa_bss_get_owe_trans_network(struct wpa_supplicant *wpa_s, const u8 *owe_ie,
+				  const u8 **bssid, const u8 **ssid, size_t *ssid_len);
 struct wpa_bss_anqp * wpa_bss_anqp_alloc(void);
 int wpa_bss_anqp_unshare_alloc(struct wpa_bss *bss);
 const u8 * wpa_bss_get_fils_cache_id(const struct wpa_bss *bss);
