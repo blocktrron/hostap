@@ -816,6 +816,36 @@ void wpa_bss_update_start(struct wpa_supplicant *wpa_s)
 	wpa_s->last_scan_res_used = 0;
 }
 
+int wpa_bss_get_owe_trans_network(struct wpa_supplicant *wpa_s, const u8 *owe_ie,
+				  const u8 **bssid, const u8 **ssid, size_t *ssid_len)
+{
+#ifdef CONFIG_OWE
+	const u8 *pos, *end;
+	u8 ssid_len_tmp;
+
+	if (!owe_ie)
+		return 1;
+
+	pos = owe_ie + 6;
+	end = owe_ie + 2 + owe_ie[1];
+
+	if (end - pos < ETH_ALEN + 1)
+		return 1;
+	*bssid = pos;
+	pos += ETH_ALEN;
+	ssid_len_tmp = *pos++;
+	if (end - pos < ssid_len_tmp || ssid_len_tmp > SSID_MAX_LEN)
+		return 1;
+
+	*ssid = pos;
+	*ssid_len = ssid_len_tmp;
+
+	return 0;
+#else /* CONFIG_OWE */
+	return 1;
+#endif /* CONFIG_OWE */
+}
+
 
 /**
  * wpa_bss_update_scan_res - Update a BSS table entry based on a scan result

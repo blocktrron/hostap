@@ -5258,8 +5258,8 @@ int wpa_supplicant_set_debug_params(struct wpa_global *global, int debug_level,
 static int owe_trans_ssid_match(struct wpa_supplicant *wpa_s, const u8 *bssid,
 				const u8 *entry_ssid, size_t entry_ssid_len)
 {
-	const u8 *owe, *pos, *end;
-	u8 ssid_len;
+	const u8 *owe, *owe_bssid, *owe_ssid;
+	size_t owe_ssid_len;
 	struct wpa_bss *bss;
 
 	/* Check network profile SSID aganst the SSID in the
@@ -5273,18 +5273,11 @@ static int owe_trans_ssid_match(struct wpa_supplicant *wpa_s, const u8 *bssid,
 	if (!owe)
 		return 0;
 
-	pos = owe + 6;
-	end = owe + 2 + owe[1];
-
-	if (end - pos < ETH_ALEN + 1)
-		return 0;
-	pos += ETH_ALEN;
-	ssid_len = *pos++;
-	if (end - pos < ssid_len || ssid_len > SSID_MAX_LEN)
+	if (wpa_bss_get_owe_trans_network(wpa_s, owe, &owe_bssid, &owe_ssid, &owe_ssid_len))
 		return 0;
 
-	return entry_ssid_len == ssid_len &&
-		os_memcmp(pos, entry_ssid, ssid_len) == 0;
+	return entry_ssid_len == owe_ssid_len &&
+		os_memcmp(owe_ssid, entry_ssid, owe_ssid_len) == 0;
 }
 #endif /* CONFIG_OWE */
 
