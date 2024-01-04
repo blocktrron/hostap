@@ -904,7 +904,7 @@ void wpa_bss_update_scan_res(struct wpa_supplicant *wpa_s,
 			     struct wpa_scan_res *res,
 			     struct os_reltime *fetch_time)
 {
-	const u8 *ssid, *p2p, *mesh;
+	const u8 *ssid, *p2p, *mesh, *owe, *rsn;
 	struct wpa_bss *bss;
 
 	if (wpa_s->conf->ignore_old_scan_res) {
@@ -934,6 +934,12 @@ void wpa_bss_update_scan_res(struct wpa_supplicant *wpa_s,
 			MACSTR, MAC2STR(res->bssid));
 		return;
 	}
+
+	/* Don't add hidden OWE transition networks with RSN. They are explicitly scanned for. */
+	rsn = wpa_scan_get_ie(res, WLAN_EID_RSN);
+	owe = wpa_scan_get_vendor_ie(res, OWE_IE_VENDOR_TYPE);
+	if (owe && rsn && (ssid[1] == 0 || ssid[2] == 0))
+		return;
 
 	p2p = wpa_scan_get_vendor_ie(res, P2P_IE_VENDOR_TYPE);
 #ifdef CONFIG_P2P
