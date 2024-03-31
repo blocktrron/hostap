@@ -383,6 +383,10 @@ void wpa_supplicant_mark_disassoc(struct wpa_supplicant *wpa_s)
 	wpa_s->key_mgmt = 0;
 	wpa_s->allowed_key_mgmts = 0;
 
+#ifdef CONFIG_OWE
+	wpa_s->owe_trans_ssid.ssid_len = 0;
+#endif
+
 #ifndef CONFIG_NO_RRM
 	wpas_rrm_reset(wpa_s);
 #endif /* CONFIG_NO_RRM */

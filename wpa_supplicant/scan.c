@@ -976,6 +976,18 @@ void wpa_add_owe_scan_ssid(struct wpa_supplicant *wpa_s,
 				  owe_ssid, owe_ssid_len);
 		return;
 	}
+
+	/**
+	 * Check if we can add a stored transition-mode SSID.
+	 * This is helpful if the scan-list only contains 6 GHz networks
+	 * which do not have a transition SSID.
+	 */
+	if (wpa_s->owe_trans_ssid.ssid_len == 0)
+		return;
+
+	wpa_add_scan_ssid(wpa_s, params, max_ssids,
+			  wpa_s->owe_trans_ssid.ssid,
+			  wpa_s->owe_trans_ssid.ssid_len);
 #endif /* CONFIG_OWE */
 }
 
