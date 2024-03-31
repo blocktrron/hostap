@@ -905,7 +905,7 @@ void wpa_bss_update_scan_res(struct wpa_supplicant *wpa_s,
 			     struct wpa_scan_res *res,
 			     struct os_reltime *fetch_time)
 {
-	const u8 *ssid, *p2p, *mesh, *owe, *rsn;
+	const u8 *ssid, *p2p, *mesh, *owe;
 	struct wpa_bss *bss;
 
 	if (wpa_s->conf->ignore_old_scan_res) {
@@ -936,11 +936,32 @@ void wpa_bss_update_scan_res(struct wpa_supplicant *wpa_s,
 		return;
 	}
 
-	/* Don't add hidden OWE transition networks with RSN. They are explicitly scanned for. */
-	rsn = wpa_scan_get_ie(res, WLAN_EID_RSN);
 	owe = wpa_scan_get_vendor_ie(res, OWE_IE_VENDOR_TYPE);
-	if (owe && rsn && (ssid[1] == 0 || ssid[2] == 0))
-		return;
+	if (owe) {
+		const uint8_t *rsn;
+		rsn = wpa_scan_get_ie(res, WLAN_EID_RSN);
+
+		/**
+		 * Don't add hidden OWE transition networks with RSN.
+		 * They are explicitly scanned for.
+		 */
+		if (rsn && (ssid[1] == 0 || ssid[2] == 0))
+			return;
+#ifdef CONFIG_OWE
+		const uint8_t *owe_bssid, *owe_ssid;
+		size_t owe_ssid_len;
+
+		/**
+		 * If the network is an OWE transition network, store the transition SSID
+		 * to allow scanning for it later when on a 6GHz network with expired
+		 * scan results.
+		 */
+		if (!rsn && !wpa_bss_get_owe_trans_network(wpa_s, owe, &owe_bssid, &owe_ssid, &owe_ssid_len)) {
+			os_memcpy(wpa_s->owe_trans_ssid.ssid, owe_ssid, owe_ssid_len);
+			wpa_s->owe_trans_ssid.ssid_len = owe_ssid_len;
+		}
+#endif /* CONFIG_OWE */
+	}
 
 	p2p = wpa_scan_get_vendor_ie(res, P2P_IE_VENDOR_TYPE);
 #ifdef CONFIG_P2P
