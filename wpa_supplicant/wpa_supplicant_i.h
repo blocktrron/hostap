@@ -1602,6 +1602,8 @@ struct wpa_supplicant {
 	/* An array of frequencies to scan for OWE transition mode BSSs when
 	 * owe_transition_search == 1 */
 	int *owe_trans_scan_freq;
+	/* The last transition-SSID seen if operating in transition-mode */
+	struct wpa_ssid_value owe_trans_ssid;
 #endif /* CONFIG_OWE */
 
 #ifdef CONFIG_NAN_USD
