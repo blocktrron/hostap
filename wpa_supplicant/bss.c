@@ -884,7 +884,10 @@ void wpa_bss_update_scan_res(struct wpa_supplicant *wpa_s,
 			     struct os_reltime *fetch_time)
 {
 	const u8 *ssid, *p2p, *mesh;
-	struct wpa_bss *bss;
+#ifdef CONFIG_OWE
+	const u8 *owe, *rsn;
+#endif
+	struct wpa_bss *bss = NULL;
 
 	if (wpa_s->conf->ignore_old_scan_res) {
 		struct os_reltime update;
@@ -938,7 +941,76 @@ void wpa_bss_update_scan_res(struct wpa_supplicant *wpa_s,
 	if (mesh && mesh[1] <= SSID_MAX_LEN)
 		ssid = mesh;
 
-	bss = wpa_bss_get(wpa_s, res->bssid, ssid + 2, ssid[1]);
+#ifdef CONFIG_OWE
+	rsn = wpa_scan_get_ie(res, WLAN_EID_RSN);
+	owe = wpa_scan_get_vendor_ie(res, OWE_IE_VENDOR_TYPE);
+
+	if (owe && rsn) {
+		struct wpa_bss *owe_tm_bss;
+
+		/*
+		 * OWE Transition networks shall be handled in two ways:
+		 * 1. Check if we have the network in our scan table
+		 * 2.a Scan-Table entry has known SSID, current result has none
+		 *     --> Abort
+		 * 2.b Scan-Table entry has no known SSID, current Result has one
+		 *     --> Update the scan-table entry
+		 */
+
+		if (ssid[1] != 0 && ssid[2] != 0) {
+			/* Current result has SSID */
+
+			/* Check if we have a potential network with missing to update */
+			dl_list_for_each(owe_tm_bss, &wpa_s->bss, struct wpa_bss, list) {
+				if (!ether_addr_equal(owe_tm_bss->bssid, res->bssid))
+					continue;
+
+				/* Need to be encrypted transition SSID*/
+				if (!wpa_bss_get_ie(owe_tm_bss, WLAN_EID_RSN))
+					continue;
+
+				if (!wpa_bss_get_vendor_ie(owe_tm_bss, OWE_IE_VENDOR_TYPE))
+					continue;
+
+				if (owe_tm_bss->ssid_len != 0 && owe_tm_bss->ssid[0] != 0)
+					continue;
+
+				/* We have a network to update */
+				owe_tm_bss->ssid_len = ssid[1];
+				os_memcpy(owe_tm_bss->ssid, ssid + 2, ssid[1]);
+				break;
+			}
+		} else {
+			/* Current result lacks SSID */
+
+			/* Check if we've learnt an SSID for said network */
+			dl_list_for_each(owe_tm_bss, &wpa_s->bss, struct wpa_bss, list) {
+				if (!ether_addr_equal(owe_tm_bss->bssid, res->bssid))
+					continue;
+
+				/* Need to be encrypted transition SSID*/
+				if (!wpa_bss_get_ie(owe_tm_bss, WLAN_EID_RSN))
+					continue;
+
+				if (!wpa_bss_get_vendor_ie(owe_tm_bss, OWE_IE_VENDOR_TYPE))
+					continue;
+
+				if (owe_tm_bss->ssid_len == 0)
+					continue;
+
+				/* Transition network is stored with SSID in scan-results.
+				 * Continue with this result.
+				 */
+				bss = owe_tm_bss;
+				break;
+			}
+		}
+	}
+#endif
+
+	if (bss == NULL)
+		bss = wpa_bss_get(wpa_s, res->bssid, ssid + 2, ssid[1]);
+
 	if (bss == NULL)
 		bss = wpa_bss_add(wpa_s, ssid + 2, ssid[1], res, fetch_time);
 	else {
